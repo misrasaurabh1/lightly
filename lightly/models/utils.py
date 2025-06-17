@@ -591,18 +591,22 @@ def random_token_mask(
 
     """
     batch_size, sequence_length = size
-    # Remove 1 from the considered sequence length if the class token cannot be masked.
-    # This only impacts the calculation of the number of tokens to keep.
-    mask_sequence_length = sequence_length - int(not mask_class_token)
-    num_keep = int(mask_sequence_length * (1 - mask_ratio))
 
-    noise = torch.rand(batch_size, sequence_length, device=device)
+    # Fast path: class token cannot be masked, adjust only calculations
     if not mask_class_token and sequence_length > 0:
-        # Make sure that class token is not masked
-        noise[:, 0] = -1
-        num_keep = max(1, num_keep + 1)
+        # class token is always kept at index 0
+        mask_sequence_length = sequence_length - 1
+        num_keep = int(mask_sequence_length * (1.0 - mask_ratio)) + 1
+        if num_keep < 1:
+            num_keep = 1
+        noise = torch.rand(batch_size, sequence_length, device=device)
+        noise[:, 0] = -1  # always lowest, always chosen in sort
+    else:
+        mask_sequence_length = sequence_length
+        num_keep = int(mask_sequence_length * (1.0 - mask_ratio))
+        noise = torch.rand(batch_size, sequence_length, device=device)
 
-    # Get indices of tokens to keep by sorting the noise
+    # Argsort once, then slice for keep and mask indices
     indices = torch.argsort(noise, dim=1)
     idx_keep = indices[:, :num_keep]
     idx_mask = indices[:, num_keep:]
