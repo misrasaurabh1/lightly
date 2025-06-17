@@ -74,15 +74,12 @@ def getenv(key: str, default: str):
     or default if it doesn’t.
 
     """
-    try:
-        return os.getenvb(key.encode(), default.encode()).decode()
-    except Exception:
-        pass
+    # Try to get the environment variable with os.getenv,
+    # fallback to default if any error occurs.
     try:
         return os.getenv(key, default)
     except Exception:
-        pass
-    return default
+        return default
 
 
 def PIL_to_bytes(img, ext: str = "png", quality: int = None):
