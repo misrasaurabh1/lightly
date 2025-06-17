@@ -82,8 +82,7 @@ class LightlyDataset:
         # can pass input_dir=None to create an "empty" dataset
         self.input_dir = input_dir
         if filenames is not None:
-            filepaths = [os.path.join(input_dir, filename) for filename in filenames]
-            filepaths = set(filepaths)
+            filepaths = {os.path.join(input_dir, filename) for filename in filenames}
 
             def is_valid_file(filepath: str):
                 return filepath in filepaths
@@ -108,6 +107,9 @@ class LightlyDataset:
         self.index_to_filename = _get_filename_by_index
         if index_to_filename is not None:
             self.index_to_filename = index_to_filename
+
+        # Precompute filenames if possible, to speed up repeated queries
+        self._filenames_cache = None
 
     @classmethod
     def from_torch_dataset(cls, dataset, transform=None, index_to_filename=None):
@@ -176,14 +178,18 @@ class LightlyDataset:
 
     def get_filenames(self) -> List[str]:
         """Returns all filenames in the dataset."""
-        if hasattr(self.dataset, "get_filenames"):
-            return self.dataset.get_filenames()
-
-        list_of_filenames = []
-        for index in range(len(self)):
-            fname = self.index_to_filename(self.dataset, index)
-            list_of_filenames.append(fname)
-        return list_of_filenames
+        if self._filenames_cache is not None:
+            return self._filenames_cache
+        dset = self.dataset
+        if hasattr(dset, "get_filenames"):
+            filenames = dset.get_filenames()
+        else:
+            index_to_filename = self.index_to_filename
+            dset_len = len(self)
+            # List comprehension for speed
+            filenames = [index_to_filename(dset, idx) for idx in range(dset_len)]
+        self._filenames_cache = filenames
+        return filenames
 
     def dump(
         self,
@@ -260,11 +266,11 @@ class LightlyDataset:
 
         """
 
-        has_input_dir = hasattr(self, "input_dir") and isinstance(self.input_dir, str)
-        if has_input_dir:
-            path_to_image = os.path.join(self.input_dir, filename)
+        # Fast check without hasattr
+        input_dir = self.input_dir if hasattr(self, "input_dir") else None
+        if isinstance(input_dir, str):
+            path_to_image = os.path.join(input_dir, filename)
             if os.path.isfile(path_to_image):
-                # the file exists, return its filepath
                 return path_to_image
 
         if image is None:
@@ -275,11 +281,11 @@ class LightlyDataset:
 
         # the file doesn't exist, save it as a jpg and return filepath
         folder_path = tempfile.mkdtemp()
-        filepath = os.path.join(folder_path, filename) + ".jpg"
-
-        if os.path.dirname(filepath):
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-
+        base, ext = os.path.splitext(filename)
+        filepath = os.path.join(folder_path, base + ".jpg")
+        parent_dir = os.path.dirname(filepath)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
         image.save(filepath)
         return filepath
 
