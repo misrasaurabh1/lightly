@@ -14,7 +14,7 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 from torch import Tensor
-from torch.nn import Identity, Module, Sequential, functional, init
+from torch.nn import Identity, Module, Sequential, init
 from torch.nn.modules import CrossMapLRN2d, GroupNorm, LayerNorm, LocalResponseNorm
 from torch.nn.modules.batchnorm import _NormBase
 from torch.nn.parameter import Parameter
@@ -909,11 +909,13 @@ def most_similar_index(
         over all y[i, ...].
 
     """
-    # Normalize the input tensors along the last dimension
-    x = functional.normalize(x, dim=-1)
-    y = functional.normalize(y, dim=-1)
+    # Fast L2 normalization along the last dimension
+    x = _normalize_l2(x)
+    y = _normalize_l2(y)
 
-    similarity = torch.einsum("bnc,bmc->bnm", x, y)
+    # Use batch matrix multiply instead of einsum for (bnc, bnc->bnm)
+    # (B, N, C) @ (B, C, N) -> (B, N, N)
+    similarity = torch.bmm(x, y.transpose(1, 2))
     return similarity.argmax(dim=2)
 
 
@@ -1309,3 +1311,11 @@ def apply_masks(x: Tensor, masks: Tensor | list[Tensor]) -> Tensor:
         mask_keep = m.unsqueeze(-1).repeat(1, 1, x.size(-1))
         all_x += [torch.gather(x, dim=1, index=mask_keep)]
     return torch.cat(all_x, dim=0)
+
+
+def _normalize_l2(input: Tensor) -> Tensor:
+    # Inline, fast L2 normalization along last dim, avoids functional overhead
+    norm = input.norm(p=2, dim=-1, keepdim=True)
+    # Avoid division by zero
+    norm = torch.clamp(norm, min=1e-12)
+    return input / norm
