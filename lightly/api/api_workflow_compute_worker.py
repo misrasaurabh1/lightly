@@ -3,7 +3,7 @@ import dataclasses
 import difflib
 import json
 import time
-from functools import partial
+from functools import lru_cache, partial
 from typing import Any, Callable, Dict, Iterator, List, Optional, Type, TypeVar, Union
 
 from lightly.api import retry_utils, utils
@@ -690,10 +690,16 @@ def _config_to_camel_case(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return cfg_camel_case
 
 
+@lru_cache(maxsize=4096)
 def _snake_to_camel_case(snake: str) -> str:
     """Converts the snake_case input to camelCase."""
+    # This is the fastest plain algorithm for small-length and repetitive keys
     components = snake.split("_")
-    return components[0] + "".join(component.title() for component in components[1:])
+    if len(components) == 1:
+        return components[0]
+    first, *rest = components
+    # Use generator expression and join for better performance than string concatenation in a loop
+    return first + "".join(map(str.title, rest))
 
 
 def _validate_config(
