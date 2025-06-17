@@ -61,15 +61,10 @@ def is_url(checkpoint):
 
 def get_ptmodel_from_config(model):
     """Get a pre-trained model from the lightly model zoo."""
-    key = model["name"]
-    key += "/simclr"
-    key += "/d" + str(model["num_ftrs"])
-    key += "/w" + str(float(model["width"]))
-
-    if key in model_zoo.keys():
+    key = f"{model['name']}/simclr/d{model['num_ftrs']}/w{float(model['width'])}"
+    if key in model_zoo:
         return model_zoo[key], key
-    else:
-        return "", key
+    return "", key
 
 
 def load_state_dict_from_url(url, map_location=None):
