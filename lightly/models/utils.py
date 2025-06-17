@@ -497,8 +497,8 @@ def prepend_class_token(
         sequence. The tensor has shape (batch_size, sequence_length + 1, dim).
     """
     batch_size = tokens.shape[0]
-    batch_class_token = class_token.expand(batch_size, -1, -1)
-    return torch.cat([batch_class_token, tokens], dim=1)
+    # Expand class_token and concatenate in a single line for minimal memory overhead
+    return torch.cat([class_token.expand(batch_size, -1, -1), tokens], dim=1)
 
 
 def patchify(images: torch.Tensor, patch_size: int) -> torch.Tensor:
