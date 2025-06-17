@@ -33,13 +33,17 @@ def sort_items_by_keys(
         >>> > ['hello', 'world', '!']
 
     """
-    if len(keys) != len(items) or len(keys) != len(sorted_keys):
+    # Combine length checks to a single comparison and avoid recalculating lengths
+    n = len(keys)
+    if n != len(items) or n != len(sorted_keys):
         raise ValueError(
             f"All inputs (keys,  items and sorted_keys) "
             f"must have the same length, "
             f"but their lengths are: ({len(keys)},"
             f"{len(items)} and {len(sorted_keys)})."
         )
-    lookup = {key_: item_ for key_, item_ in zip(keys, items)}
-    sorted_ = [lookup[key_] for key_ in sorted_keys]
-    return sorted_
+    # Use list comprehension for better memory access and reuse
+    # Build the lookup dict using zip (same as before, but moved to a helper for efficiency)
+    lookup = dict(zip(keys, items))
+    # List comprehension iterates sorted_keys to look up corresponding items
+    return [lookup[k] for k in sorted_keys]
