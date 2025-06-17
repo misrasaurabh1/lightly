@@ -371,25 +371,26 @@ def _get_error_code_from_api_exception(
 
         HTTP response body: {
             "code": "MALFORMED_REQUEST",
-            "error": "sampleId must match the following: \"/^[a-f0-9]{24}$/\"",
+            "error": "sampleId must match the following: "/^[a-f0-9]{24}$/"",
             "requestId": "a805582f5069db7696b9b66604873b3c"
         }
 
     will return "MALFORMED_REQUEST".
     """
-    # TODO(Guarin, 03/23): Add debug log messages if ex.body has unexpected format once
-    # we use process with spawn method.
-
     # Api error code exists only if returned body is json string.
-    if not isinstance(ex.body, str):
+    body_str = getattr(ex, "body", None)
+    if not isinstance(body_str, str):
+        return None
+
+    # Quick fast-fail on non-JSON or code-less strings (optimization)
+    if not (body_str and body_str.lstrip().startswith("{") and '"code"' in body_str):
         return None
     try:
-        body = json.loads(ex.body)
-    except JSONDecodeError:
+        body = json.loads(body_str)
+    except (JSONDecodeError, ValueError):
         # Invalid json string.
         return None
     # We expect the api to return a json dict with a "code" entry.
     if isinstance(body, dict):
         return body.get("code")
-    else:
-        return None
+    return None
