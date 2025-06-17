@@ -103,7 +103,11 @@ def center_mean(x: Tensor, dim: Tuple[int, ...]) -> Tensor:
 @torch.no_grad()
 def center_momentum(center: Tensor, batch_center: Tensor, momentum: float) -> Tensor:
     """Returns the new center with momentum update."""
-    return center * momentum + batch_center * (1 - momentum)
+    # Use out-parameter to avoid unnecessary allocations
+    # Only calculate (1 - momentum) once for efficiency
+    out = center.mul(momentum)
+    out.add_(batch_center, alpha=1 - momentum)
+    return out
 
 
 CENTER_MODE_TO_FUNCTION = {
