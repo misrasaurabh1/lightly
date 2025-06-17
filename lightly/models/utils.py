@@ -54,27 +54,39 @@ def pool_masked(
 def _mask_reduce(
     source: Tensor, mask: Tensor, num_cls: int, reduce: str = "mean"
 ) -> Tensor:
-    output = _mask_reduce_batched(
-        source.unsqueeze(0), mask.unsqueeze(0), num_cls=num_cls, reduce=reduce
-    )
-    return output.squeeze(0)
+    # Optimize: handle batch dim without unsqueeze/squeeze
+    if source.dim() == 4:
+        return _mask_reduce_batched(source, mask, num_cls, reduce)
+    else:
+        # Single example, add batch dim
+        output = _mask_reduce_batched(
+            source[None], mask[None], num_cls=num_cls, reduce=reduce
+        )
+        return output[0]
 
 
 def _mask_reduce_batched(
     source: Tensor, mask: Tensor, num_cls: int, reduce: str = "mean"
 ) -> Tensor:
     b, c, h, w = source.shape
-    cls = torch.arange(num_cls, device=mask.device)
-    num_cls = cls.size(0)
-    # create output tensor
-    output = source.new_zeros((b, c, num_cls))  # (B C N)
-    mask = mask.unsqueeze(1).expand(-1, c, -1, -1).view(b, c, -1)  # (B C HW)
-    source = source.view(b, c, -1)  # (B C HW)
+    # Flatten once to avoid redundant views
+    src_flat = source.view(b, c, -1)  # (B, C, HW)
+    mask_flat = mask.view(b, -1)  # (B, HW)
+    # Prepare output tensor with minimal allocation
+    output = source.new_zeros((b, c, num_cls))
+    # Use mask_flat directly as indices for scatter_reduce_
+    # Avoid expand: use broadcasting by unsqueezing where needed
     output.scatter_reduce_(
-        dim=2, index=mask, src=source, reduce=reduce, include_self=False
-    )  # (B C N)
-    # scatter_reduce_ produces NaNs if the count is zero
-    output = torch.nan_to_num(output, nan=0.0)
+        dim=2,
+        index=mask_flat.unsqueeze(1).expand(-1, c, -1),  # (B, C, HW)
+        src=src_flat,
+        reduce=reduce,
+        include_self=False,
+    )
+    # Only call nan_to_num if necessary (some reductions may not produce nan)
+    if reduce == "mean":
+        # More efficient nan_to_num (no new allocation) for many elements
+        torch.nan_to_num(output, nan=0.0, out=output)
     return output
 
 
