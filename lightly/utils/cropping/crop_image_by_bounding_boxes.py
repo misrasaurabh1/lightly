@@ -1,6 +1,6 @@
+import os
 import os.path
 import warnings
-from pathlib import Path
 from typing import List
 
 from PIL import Image
@@ -40,47 +40,56 @@ def crop_dataset_by_bounding_boxes_and_save(
 
     """
     filenames_images = dataset.get_filenames()
-    if len(filenames_images) != len(bounding_boxes_list_list) or len(
-        filenames_images
-    ) != len(class_indices_list_list):
+    n_imgs = len(filenames_images)
+    if n_imgs != len(bounding_boxes_list_list) or n_imgs != len(
+        class_indices_list_list
+    ):
         raise ValueError(
             "There must be one bounding box and class index list for each image in the datasets,"
             "but the lengths dont align."
         )
 
     cropped_image_filepath_list_list: List[List[str]] = []
+    print(f"Cropping objects out of {n_imgs} images...")
 
-    print(f"Cropping objects out of {len(filenames_images)} images...")
-    for filename_image, class_indices, bounding_boxes in tqdm(
-        zip(filenames_images, class_indices_list_list, bounding_boxes_list_list)
+    dir_cache = set()  # Avoid multiple mkdirdirs for the same output
+
+    # Use enumerate and zip to avoid tuple unpacking in for loop
+    for img_idx, (filename_image, class_indices, bounding_boxes) in enumerate(
+        tqdm(
+            zip(filenames_images, class_indices_list_list, bounding_boxes_list_list),
+            total=n_imgs,
+        )
     ):
-        if not len(class_indices) == len(bounding_boxes):
+        if len(class_indices) != len(bounding_boxes):
             warnings.warn(
                 UserWarning(
-                    f"Length of class indices ({len(class_indices)} does not equal length of bounding boxes"
-                    f"({len(bounding_boxes)}. This is an error in the input arguments. "
+                    f"Length of class indices ({len(class_indices)}) does not equal length of bounding boxes"
+                    f"({len(bounding_boxes)}). This is an error in the input arguments. "
                     f"Skipping this image {filename_image}."
                 )
             )
             continue
 
+        # Get image full path (Disk I/O is unavoidable)
         filepath_image = dataset.get_filepath_from_filename(filename_image)
         filepath_image_base, image_extension = os.path.splitext(filepath_image)
 
-        filepath_out_dir = os.path.join(output_dir, filename_image).replace(
-            image_extension, ""
-        )
-        Path(filepath_out_dir).mkdir(parents=True, exist_ok=True)
+        # Use string ops, avoid repeated replace if not needed
+        filepath_out_dir = os.path.join(output_dir, filename_image)
+        if filepath_out_dir.endswith(image_extension):
+            filepath_out_dir = filepath_out_dir[: -len(image_extension)]
 
+        if filepath_out_dir not in dir_cache:
+            os.makedirs(filepath_out_dir, exist_ok=True)
+            dir_cache.add(filepath_out_dir)
+
+        # Open image (disk I/O, unavoidable)
         image = Image.open(filepath_image)
+        w, h = image.size  # Only compute once per image
 
         cropped_images_filepaths = []
-        # For every image, crop out multiple cropped images, one for each
-        # bounding box
-        for index, (class_index, bbox) in enumerate(
-            (zip(class_indices, bounding_boxes))
-        ):
-            # determine the filename and filepath of the cropped image
+        for index, (class_index, bbox) in enumerate(zip(class_indices, bounding_boxes)):
             if class_names:
                 class_name = class_names[class_index]
             else:
@@ -90,16 +99,21 @@ def crop_dataset_by_bounding_boxes_and_save(
                 filepath_out_dir, cropped_image_last_filename
             )
 
-            # crop out the image and save it
-            w, h = image.size
-            crop_box = (w * bbox.x0, h * bbox.y0, w * bbox.x1, h * bbox.y1)
-            crop_box = tuple(int(i) for i in crop_box)
+            # Integer cropping, avoid per-element generator
+            crop_box = (
+                int(w * bbox.x0),
+                int(h * bbox.y0),
+                int(w * bbox.x1),
+                int(h * bbox.y1),
+            )
             cropped_image = image.crop(crop_box)
             cropped_image.save(cropped_image_filepath)
 
-            # add the filename of the cropped image to the corresponding list
-            cropped_image_filename: str = os.path.join(
-                filename_image.replace(image_extension, ""), cropped_image_last_filename
+            cropped_image_filename = os.path.join(
+                filename_image[: -len(image_extension)]
+                if filename_image.endswith(image_extension)
+                else filename_image,
+                cropped_image_last_filename,
             )
             cropped_images_filepaths.append(cropped_image_filename)
 
