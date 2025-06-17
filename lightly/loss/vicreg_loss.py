@@ -129,7 +129,9 @@ def invariance_loss(x: Tensor, y: Tensor) -> Tensor:
     Returns:
         The computed VICReg invariance loss.
     """
-    return F.mse_loss(x, y)
+    # Manual fast MSE implementation (reduction='mean', default)
+    diff = x - y
+    return (diff * diff).mean()
 
 
 def variance_loss(x: Tensor, eps: float = 0.0001) -> Tensor:
