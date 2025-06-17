@@ -3,7 +3,7 @@ import dataclasses
 import difflib
 import json
 import time
-from functools import partial
+from functools import lru_cache, partial
 from typing import Any, Callable, Dict, Iterator, List, Optional, Type, TypeVar, Union
 
 from lightly.api import retry_utils, utils
@@ -690,10 +690,19 @@ def _config_to_camel_case(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return cfg_camel_case
 
 
+@lru_cache(maxsize=4096)
 def _snake_to_camel_case(snake: str) -> str:
     """Converts the snake_case input to camelCase."""
     components = snake.split("_")
-    return components[0] + "".join(component.title() for component in components[1:])
+    n = len(components)
+    if n == 1:
+        return components[0]
+    title = str.title  # Local function reference for a tiny speed boost
+    # Use fast path for two-component names (very common)
+    if n == 2:
+        return components[0] + title(components[1])
+    # General case
+    return components[0] + "".join(map(title, components[1:]))
 
 
 def _validate_config(
