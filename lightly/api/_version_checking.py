@@ -1,3 +1,4 @@
+from functools import lru_cache
 from threading import Thread
 
 from lightly.api import utils
@@ -33,6 +34,7 @@ def get_latest_version(
     return version_number
 
 
+@lru_cache(maxsize=1)
 def get_minimum_compatible_version(
     timeout_sec: float = DEFAULT_TIMEOUT_SEC,
 ) -> str:
