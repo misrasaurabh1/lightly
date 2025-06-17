@@ -13,15 +13,18 @@
 """
 
 
-import re  # noqa: F401
 import io
+import re  # noqa: F401
 import warnings
+from typing import Optional
+
 try:
     # Pydantic >=v1.10.17
-    from pydantic.v1 import validate_arguments, ValidationError
+    from pydantic.v1 import ValidationError, validate_arguments
 except ImportError:
     # Pydantic v1
     from pydantic import validate_arguments, ValidationError
+
 from typing_extensions import Annotated
 
 try:
@@ -33,13 +36,9 @@ except ImportError:
 
 from typing import Optional
 
-
-from lightly.openapi_generated.swagger_client.api_client import ApiClient
 from lightly.openapi_generated.swagger_client.api_response import ApiResponse
 from lightly.openapi_generated.swagger_client.exceptions import (  # noqa: F401
-    ApiTypeError,
-    ApiValueError
-)
+    ApiTypeError, ApiValueError)
 
 
 class VersioningApi(object):
@@ -50,12 +49,15 @@ class VersioningApi(object):
     """
 
     def __init__(self, api_client=None):
+        # Use default singleton client if not supplied
+        # Defer import to reduce import time/memory if possible (lazy import)
         if api_client is None:
+            from lightly.openapi_generated.swagger_client.api_client import \
+                ApiClient
             api_client = ApiClient.get_default()
         self.api_client = api_client
 
-    @validate_arguments
-    def get_latest_pip_version(self, current_version : Optional[StrictStr] = None, **kwargs) -> str:  # noqa: E501
+    def get_latest_pip_version(self, current_version : Optional[StrictStr] = None, **kwargs) -> str:
         """Get latest pip version  # noqa: E501
 
         Get latest pip version available  # noqa: E501
@@ -78,10 +80,11 @@ class VersioningApi(object):
                  returns the request thread.
         :rtype: str
         """
+        # Avoid pydantic runtime overhead in function calls for tight loops or hot path
         kwargs['_return_http_data_only'] = True
         if '_preload_content' in kwargs:
             raise ValueError("Error! Please call the get_latest_pip_version_with_http_info method with `_preload_content` instead and obtain raw data from ApiResponse.raw_data")
-        return self.get_latest_pip_version_with_http_info(current_version, **kwargs)  # noqa: E501
+        return self.get_latest_pip_version_with_http_info(current_version, **kwargs)
 
     @validate_arguments
     def get_latest_pip_version_with_http_info(self, current_version : Optional[StrictStr] = None, **kwargs) -> ApiResponse:  # noqa: E501

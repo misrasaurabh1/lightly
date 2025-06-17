@@ -1,3 +1,4 @@
+from functools import cache, lru_cache
 from threading import Thread
 
 from lightly.api import utils
@@ -25,12 +26,11 @@ def get_latest_version(
     current_version: str, timeout_sec: float = DEFAULT_TIMEOUT_SEC
 ) -> str:
     """Returns the latest package version."""
-    versioning_api = _get_versioning_api()
-    version_number: str = versioning_api.get_latest_pip_version(
+    versioning_api = cached_versioning_api()
+    return versioning_api.get_latest_pip_version(
         current_version=current_version,
         _request_timeout=timeout_sec,
     )
-    return version_number
 
 
 def get_minimum_compatible_version(
@@ -71,3 +71,13 @@ def _get_versioning_api() -> VersioningApi:
     api_client = LightlySwaggerApiClient(configuration=configuration)
     versioning_api = VersioningApi(api_client=api_client)
     return versioning_api
+
+
+# Assume these globals are available due to snippet context
+# DEFAULT_TIMEOUT_SEC, _get_versioning_api
+
+
+@cache
+def cached_versioning_api():
+    # Use cache for singleton since versioning API object has no LRU needs
+    return _get_versioning_api()
