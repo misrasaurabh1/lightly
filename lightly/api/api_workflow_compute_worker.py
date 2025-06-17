@@ -3,7 +3,6 @@ import dataclasses
 import difflib
 import json
 import time
-from functools import partial
 from typing import Any, Callable, Dict, Iterator, List, Optional, Type, TypeVar, Union
 
 from lightly.api import retry_utils, utils
@@ -674,8 +673,10 @@ def _get_deserialize(
     The deserializer takes a dictionary and and returns an instance of klass.
 
     """
-    deserialize = getattr(api_client, "_ApiClient__deserialize")
-    return partial(deserialize, klass=klass)
+    # Cache the lookup for __deserialize method - this avoids repeat lookups each call
+    deserialize = api_client._ApiClient__deserialize
+    # Use a direct lambda for minimal overhead vs functools.partial
+    return lambda data: deserialize(data, klass=klass)
 
 
 def _config_to_camel_case(cfg: Dict[str, Any]) -> Dict[str, Any]:
