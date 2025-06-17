@@ -314,5 +314,8 @@ def _same_mask(mask0: Tensor, mask1: Tensor) -> Tensor:
 def _torch_manual_cross_entropy(
     labels: Tensor, logits: Tensor, weight: Tensor
 ) -> Tensor:
-    ce = -weight * torch.sum(labels * F.log_softmax(logits, dim=-1), dim=-1)
-    return torch.mean(ce)
+    # Use F.log_softmax with out-of-place memory to avoid repeated computation
+    log_probs = F.log_softmax(logits, dim=-1)
+    # Batched dot-product (sum over -1) and fuse with -weight
+    ce = -(weight * torch.sum(labels * log_probs, dim=-1))
+    return ce.mean()
