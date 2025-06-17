@@ -28,7 +28,9 @@ def prototype_probabilities(
         Probability tensor with shape (batch_size, num_prototypes) which sums to 1 along
         the num_prototypes dimension.
     """
-    return F.softmax(torch.matmul(queries, prototypes.T) / temperature, dim=1)
+    logits = torch.mm(queries, prototypes.T)
+    logits.div_(temperature)  # in-place division for speed/memory
+    return F.softmax(logits, dim=1)
 
 
 def sharpen(probabilities: Tensor, temperature: float) -> Tensor:
