@@ -987,9 +987,18 @@ def get_weight_decay_parameters(
 
 def get_named_leaf_modules(module: Module) -> Dict[str, Module]:
     """Returns all leaf modules of the model with their names."""
-    return {
-        name: mod for name, mod in module.named_modules() if not any(mod.children())
-    }
+
+    def traverse(module: Module, prefix: str = ""):
+        has_child = False
+        for name, child in module.named_children():
+            has_child = True
+            child_prefix = prefix + ("." if prefix else "") + name
+            yield from traverse(child, child_prefix)
+        if not has_child:
+            yield prefix, module
+
+    # root module itself is always returned by .named_modules(), so handle if it's a leaf
+    return dict(traverse(module, ""))
 
 
 def add_stochastic_depth_to_blocks(vit: Module, prob: float = 0.0, mode="row") -> None:
