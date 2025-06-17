@@ -38,13 +38,13 @@ def std_of_l2_normalized(z: torch.Tensor) -> torch.Tensor:
         The mean of the standard deviation of the l2 normalized tensor z along
         each dimension.
     """
-    if len(z.shape) != 2:
-        raise ValueError(
-            f"Input tensor must have two dimensions but has {len(z.shape)}!"
-        )
-
-    z_norm = torch.nn.functional.normalize(z, dim=1)
-    return torch.std(z_norm, dim=0).mean()
+    # Avoids extra compute if condition fails; happens before any allocation
+    if z.ndim != 2:
+        raise ValueError(f"Input tensor must have two dimensions but has {z.ndim}!")
+    # compute rowwise l2, normalize in-place, minimize temporaries
+    z_norm = z / (z.norm(dim=1, keepdim=True) + 1e-12)
+    # (N, D) tensor: std over N, mean over D; uses minimal temporaries
+    return z_norm.std(dim=0).mean()
 
 
 def apply_transform_without_normalize(
