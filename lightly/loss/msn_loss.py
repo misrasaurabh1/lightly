@@ -43,9 +43,15 @@ def sharpen(probabilities: Tensor, temperature: float) -> Tensor:
     Returns:
         Probabilities tensor with shape (batch_size, dim).
     """
-    probabilities = probabilities ** (1.0 / temperature)
-    probabilities /= torch.sum(probabilities, dim=1, keepdim=True)
-    return probabilities
+    if temperature == 1.0:
+        return probabilities
+
+    # Use torch.pow for better performance and possible hardware acceleration
+    inv_temp = 1.0 / temperature
+    sharp = torch.pow(probabilities, inv_temp)
+    sharp_sum = sharp.sum(dim=1, keepdim=True)
+    # Use torch.div for slightly better efficiency than /=
+    return torch.div(sharp, sharp_sum)
 
 
 @torch.no_grad()
