@@ -661,29 +661,35 @@ def _sample_unseen_and_valid(
     # with dot notation should be handled either in the API or the Worker. Duplicate
     # filenames should be handled in the Worker as handling it in the API would require
     # too much memory.
-    if sample.file_name.startswith("/"):
+
+    fname = sample.file_name  # Save attribute lookup
+    # Fastest/most likely negative first
+    if fname in listed_filenames:
+        # Format the error message only if needed
         warnings.warn(
             UserWarning(
-                f"Absolute file paths like {sample.file_name} are not supported"
-                f" in relevant filenames file {relevant_filenames_file_name} due to blob storage"
-            )
-        )
-        return False
-    elif sample.file_name.startswith(("./", "../")):
-        warnings.warn(
-            UserWarning(
-                f"Using dot notation ('./', '../') like in {sample.file_name} is not supported"
-                f" in relevant filenames file {relevant_filenames_file_name} due to blob storage"
-            )
-        )
-        return False
-    elif sample.file_name in listed_filenames:
-        warnings.warn(
-            UserWarning(
-                f"Duplicate filename {sample.file_name} in relevant"
+                f"Duplicate filename {fname} in relevant"
                 f" filenames file {relevant_filenames_file_name}"
             )
         )
         return False
-    else:
-        return True
+    if fname.startswith("/"):
+        warnings.warn(
+            UserWarning(
+                f"Absolute file paths like {fname} are not supported"
+                f" in relevant filenames file {relevant_filenames_file_name} due to blob storage"
+            )
+        )
+        return False
+    if fname.startswith(_DOT_PREFIXES):
+        warnings.warn(
+            UserWarning(
+                f"Using dot notation ('./', '../') like in {fname} is not supported"
+                f" in relevant filenames file {relevant_filenames_file_name} due to blob storage"
+            )
+        )
+        return False
+    return True
+
+
+_DOT_PREFIXES = ("./", "../")
