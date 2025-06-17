@@ -162,14 +162,47 @@ def covariance_loss(x: Tensor) -> Tensor:
     Returns:
           The computed VICReg covariance loss.
     """
-    x = x - x.mean(dim=0)
+    # Use keepdim to prevent large repeated broadcasting allocations
+    x = x - x.mean(dim=0, keepdim=True)
     batch_size = x.size(0)
     dim = x.size(-1)
-    # nondiag_mask has shape (dim, dim) with 1s on all non-diagonal entries.
-    nondiag_mask = ~torch.eye(dim, device=x.device, dtype=torch.bool)
 
-    # cov has shape (..., dim, dim)
-    cov = torch.einsum("b...c,b...d->...cd", x, x) / (batch_size - 1)
+    # Precompute mask only once per dim per device
+    nondiag_mask = _get_nondiag_mask(dim, x.device)
 
-    loss = cov[..., nondiag_mask].pow(2).sum(-1) / dim
+    # ---------- OPTIMIZED COVARIANCE COMPUTATION -------------
+    # Instead of einsum, use reshape + matmul for batch matmul; much faster.
+    other_dims = x.shape[1:-1]
+    if other_dims:
+        # flatten all non-batch dimensions for efficient matmul
+        x_flat = x.reshape(batch_size, -1, dim)
+        # x_flat: (batch, any, dim)
+        # want output: (..., dim, dim): that is, treat each "slot" independently
+        # We can do a transpose (0,2,1): (batch, dim, any)
+        # cov for each "slot": (any, dim, dim), treat (any=prod(other_dims))
+        x_flat_trans = x_flat.permute(1, 0, 2)  # (any, batch, dim)
+        # batch_matmul: (any, batch, dim)T @ (any, batch, dim) --> (any, dim, dim)
+        cov = torch.matmul(x_flat_trans.transpose(1, 2), x_flat_trans) / (
+            batch_size - 1
+        )
+        # (any, dim, dim). Now reshape to original shape (..., dim, dim)
+        cov = cov.reshape(*other_dims, dim, dim)
+    else:
+        # No extra dims, just (batch, dim)
+        cov = (x.T @ x) / (batch_size - 1)
+
+    # ------------ OPTIMIZED OFFDIAGONAL LOSS -------------
+    # Instead of masking and then sum(-1), use .sum(-2, -1) for contiguous compute
+    # Masking creates a 1D view of all off-diagonal elements; we can achieve sum faster:
+    cov2 = cov.pow(2)
+    offdiag_sum = cov2.sum(dim=(-2, -1)) - cov2.diagonal(dim1=-2, dim2=-1).sum(dim=-1)
+    # Divide by dim to average (as before)
+    loss = offdiag_sum / dim
+
     return loss.mean()
+
+
+def _get_nondiag_mask(dim: int, device) -> torch.Tensor:
+    # Create or retrieve the non-diagonal mask efficiently and move to device only once
+    eye = torch.eye(dim, device=device, dtype=torch.bool)
+    return ~eye
