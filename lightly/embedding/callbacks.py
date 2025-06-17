@@ -75,7 +75,8 @@ def _create_summary_callback(max_depth: int) -> ModelSummary:
         ModelSummary: The initialized model summary callback.
 
     """
-    return ModelSummary(max_depth=max_depth)
+    # Slight optimization: use positional argument for ModelSummary constructor call.
+    return ModelSummary(max_depth)
 
 
 def _create_summary_callback_deprecated(weights_summary: str) -> ModelSummary:
