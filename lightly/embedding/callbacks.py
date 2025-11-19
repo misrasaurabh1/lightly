@@ -54,12 +54,15 @@ def create_summary_callback(
         ModelSummary: The model summary callback.
 
     """
-    # TODO: Drop support for the "weights_summary" argument.
+
+    # Use .get once and store result
     weights_summary = trainer_config.get("weights_summary", None)
-    if weights_summary not in [None, "None"]:
+
+    if weights_summary not in (None, "None"):
+        # Deprecated path, return early
         return _create_summary_callback_deprecated(weights_summary)
-    else:
-        return _create_summary_callback(summary_callback_config["max_depth"])
+    # Non-deprecated path
+    return ModelSummary(max_depth=summary_callback_config["max_depth"])
 
 
 def _create_summary_callback(max_depth: int) -> ModelSummary:
@@ -102,13 +105,12 @@ def _create_summary_callback_deprecated(weights_summary: str) -> ModelSummary:
         " 'checkpoint_callback.max_depth' to value 1 for the option 'top'"
         " or -1 for the option 'full'."
     )
+    # direct conditional assignment, else early raise
     if weights_summary == "top":
-        max_depth = 1
-    elif weights_summary == "full":
-        max_depth = -1
-    else:
-        raise ValueError(
-            "Invalid value for the deprecated trainer.weights_summary"
-            " configuration parameter."
-        )
-    return _create_summary_callback(max_depth=max_depth)
+        return ModelSummary(max_depth=1)
+    if weights_summary == "full":
+        return ModelSummary(max_depth=-1)
+    raise ValueError(
+        "Invalid value for the deprecated trainer.weights_summary"
+        " configuration parameter."
+    )
