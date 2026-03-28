@@ -55,8 +55,7 @@ def fix_hydra_arguments(config_path: str = "config", config_name: str = "config"
 
 def is_url(checkpoint):
     """Check whether the checkpoint is a url or not."""
-    is_url = "https://storage.googleapis.com" in checkpoint
-    return is_url
+    return "https://storage.googleapis.com" in checkpoint
 
 
 def get_ptmodel_from_config(model):
